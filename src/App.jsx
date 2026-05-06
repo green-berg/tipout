@@ -232,7 +232,7 @@ export default function TipSplit() {
 
         {/* Tip Pool */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "16px", marginBottom: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-          <label style={{ display: "block", fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#9a8f7a", fontWeight: 600, marginBottom: 8 }}>Total Tips Collected</label>
+          <label style={{ display: "block", fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#9a8f7a", fontWeight: 600, marginBottom: 8 }}>Total Cash Tips Collected</label>
           <div style={{ display: "flex", alignItems: "center", background: "#f5f0e8", borderRadius: 10, border: "2px solid #e8e0d0", overflow: "hidden" }}>
             <span style={{ padding: "0 12px", fontSize: 20, color: "#b8860b", fontWeight: 600, fontFamily: "'Fraunces', serif" }}>$</span>
             <input className="field" inputMode="decimal" type="number" min="0" step="0.01" placeholder="0.00" value={totalTips}
