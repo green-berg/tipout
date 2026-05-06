@@ -240,11 +240,22 @@ export default function TipSplit() {
     }
     const totalMins = rows.reduce((a, b) => a + b.mins, 0);
     let computed = rows.map((r) => ({ ...r, exact: r.mins * tips / totalMins, rounded: Math.round(r.mins * tips / totalMins) }));
-    // If standard rounding causes total to exceed pool, nudge highest earner(s) down by $1 until balanced
     let distributed = computed.reduce((a, b) => a + b.rounded, 0);
+    // If rounding causes overpayment, reduce the person(s) with the smallest fractional overage (closest to .50) one dollar at a time
     while (distributed > tips) {
-      const maxIdx = computed.reduce((bestI, r, i, arr) => r.rounded > arr[bestI].rounded ? i : bestI, 0);
-      computed = computed.map((r, i) => i === maxIdx ? { ...r, rounded: r.rounded - 1 } : r);
+      // Among those who were rounded up, find the one with the smallest fraction above .50
+      let targetIdx = -1;
+      let smallestFraction = Infinity;
+      computed.forEach((r, i) => {
+        const frac = r.exact - Math.floor(r.exact);
+        if (r.rounded > Math.floor(r.exact) && frac < smallestFraction) {
+          smallestFraction = frac;
+          targetIdx = i;
+        }
+      });
+      // Fallback: just reduce the highest earner
+      if (targetIdx === -1) targetIdx = computed.reduce((bestI, r, i, arr) => r.rounded > arr[bestI].rounded ? i : bestI, 0);
+      computed = computed.map((r, i) => i === targetIdx ? { ...r, rounded: r.rounded - 1 } : r);
       distributed -= 1;
     }
     setResults({ computed, distributed, remainder: tips - distributed, totalMins });
