@@ -19,7 +19,7 @@ const to24Mins = (h, m, ampm) => {
 
 const EMPTY = { name: "", startH: "", startM: "", startAmPm: "PM", endH: "", endM: "", endAmPm: "PM" };
 
-export default function TipOut() {
+export default function TipSplit() {
   const [staff, setStaff] = useState([{ ...EMPTY }, { ...EMPTY }]);
   const [totalTips, setTotalTips] = useState("");
   const [results, setResults] = useState(null);
@@ -81,7 +81,7 @@ export default function TipOut() {
       <div style={{ background: "#1a1814", padding: "24px 20px 20px", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 900, color: "#f5f0e8", letterSpacing: "-0.5px" }}>TipOut</span>
+            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 900, color: "#f5f0e8", letterSpacing: "-0.5px" }}>TipSplit</span>
             <span style={{ fontSize: 11, color: "#b8860b", letterSpacing: "0.2em", textTransform: "uppercase", marginLeft: 10, fontWeight: 500 }}>Pool Calculator</span>
           </div>
         </div>
