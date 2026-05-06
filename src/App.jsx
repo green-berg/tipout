@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 const fmt = (val) => val.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
@@ -8,7 +8,6 @@ const hoursLabel = (mins) => {
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 };
 
-// Convert 12-hour + AM/PM to total minutes since midnight
 const to24Mins = (h, m, ampm) => {
   let hours = parseInt(h || 0);
   const minutes = parseInt(m || 0);
@@ -18,16 +17,74 @@ const to24Mins = (h, m, ampm) => {
 };
 
 const EMPTY = { name: "", startH: "", startM: "", startAmPm: "PM", endH: "", endM: "", endAmPm: "PM" };
+const DEFAULT_STAFF = [{ ...EMPTY }, { ...EMPTY }];
+const STORAGE_KEY = "tipsplit_session";
+const RESET_AFTER_MS = 10 * 60 * 1000; // 10 minutes
+
+const loadSession = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const { timestamp, staff, totalTips } = JSON.parse(raw);
+    const elapsed = Date.now() - timestamp;
+    if (elapsed > RESET_AFTER_MS) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return { staff, totalTips };
+  } catch {
+    return null;
+  }
+};
+
+const saveSession = (staff, totalTips) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      staff,
+      totalTips
+    }));
+  } catch {}
+};
+
+const clearSession = () => {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+};
 
 export default function TipSplit() {
-  const [staff, setStaff] = useState([{ ...EMPTY }, { ...EMPTY }]);
-  const [totalTips, setTotalTips] = useState("");
+  const saved = loadSession();
+  const [staff, setStaff] = useState(saved?.staff || DEFAULT_STAFF);
+  const [totalTips, setTotalTips] = useState(saved?.totalTips || "");
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
+
+  // Save session whenever staff or totalTips changes
+  useEffect(() => {
+    saveSession(staff, totalTips);
+  }, [staff, totalTips]);
+
+  // On app close/background, record the timestamp
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        saveSession(staff, totalTips);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [staff, totalTips]);
 
   const update = (i, field, val) => {
     setStaff((p) => { const n = [...p]; n[i] = { ...n[i], [field]: val }; return n; });
     setResults(null); setError("");
+  };
+
+  const reset = () => {
+    setStaff(DEFAULT_STAFF.map(e => ({ ...e })));
+    setTotalTips("");
+    setResults(null);
+    setError("");
+    clearSession();
   };
 
   const calculate = useCallback(() => {
@@ -42,7 +99,7 @@ export default function TipSplit() {
       const startMins = to24Mins(s.startH, s.startM, s.startAmPm);
       const endMins = to24Mins(s.endH, s.endM, s.endAmPm);
       let mins = endMins - startMins;
-      if (mins <= 0) mins += 1440; // overnight shift
+      if (mins <= 0) mins += 1440;
       if (mins <= 0 || mins > 1440) { setError(`${s.name}: check times.`); return; }
       rows.push({ name: s.name.trim(), mins, startH: s.startH, startM: s.startM, startAmPm: s.startAmPm, endH: s.endH, endM: s.endM, endAmPm: s.endAmPm });
     }
@@ -71,6 +128,7 @@ export default function TipSplit() {
         .go-btn { transition: transform 0.1s, background 0.15s; }
         .go-btn:active { transform: scale(0.97); }
         .ampm-btn { transition: all 0.15s; }
+        .reset-btn:active { opacity: 0.7; }
         @keyframes pop { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .pop { animation: pop 0.3s cubic-bezier(.34,1.56,.64,1) forwards; }
         @keyframes rowIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
@@ -84,6 +142,11 @@ export default function TipSplit() {
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 900, color: "#f5f0e8", letterSpacing: "-0.5px" }}>TipSplit</span>
             <span style={{ fontSize: 11, color: "#b8860b", letterSpacing: "0.2em", textTransform: "uppercase", marginLeft: 10, fontWeight: 500 }}>Pool Calculator</span>
           </div>
+          <button
+            className="reset-btn"
+            onClick={reset}
+            style={{ background: "none", border: "1px solid #3e3a32", color: "#7a7163", borderRadius: 8, padding: "6px 12px", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+          >Reset</button>
         </div>
       </div>
 
@@ -121,7 +184,6 @@ export default function TipSplit() {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {staff.map((s, i) => (
               <div key={i} className="row-in" style={{ background: "#fff", borderRadius: 14, padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", border: "1.5px solid #ede7d9" }}>
-                {/* Name row */}
                 <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
                   <input
                     className="field"
@@ -137,7 +199,6 @@ export default function TipSplit() {
                     >×</button>
                   )}
                 </div>
-                {/* Time row */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 20px 1fr", gap: 8, alignItems: "end" }}>
                   <TimeBlock
                     label="Clock In"
@@ -183,7 +244,6 @@ export default function TipSplit() {
               <span style={{ fontSize: 11, color: "#9a8f7a" }}>{hoursLabel(results.totalMins)} total</span>
             </div>
 
-            {/* Result Cards */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
               {results.computed.map((r, i) => (
                 <div key={i} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 1px 6px rgba(0,0,0,0.05)", border: "1.5px solid #ede7d9" }}>
@@ -199,8 +259,7 @@ export default function TipSplit() {
               ))}
             </div>
 
-            {/* Summary Bar */}
-            <div style={{ background: "#1a1814", borderRadius: 14, padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0 }}>
+            <div style={{ background: "#1a1814", borderRadius: 14, padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0, marginBottom: 16 }}>
               <div style={{ textAlign: "center", paddingRight: 16 }}>
                 <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6a6050", marginBottom: 6 }}>Distributed</div>
                 <div style={{ fontSize: 26, fontFamily: "'Fraunces', serif", fontWeight: 700, color: "#f5f0e8" }}>${results.distributed}</div>
@@ -211,6 +270,13 @@ export default function TipSplit() {
                 <div style={{ fontSize: 26, fontFamily: "'Fraunces', serif", fontWeight: 700, color: "#b8860b" }}>{fmt(results.remainder)}</div>
               </div>
             </div>
+
+            {/* New Event button after results */}
+            <button
+              className="reset-btn"
+              onClick={reset}
+              style={{ width: "100%", background: "none", border: "1.5px solid #e8e0d0", color: "#9a8f7a", borderRadius: 14, padding: "14px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'DM Sans', sans-serif" }}
+            >Start New Event</button>
           </div>
         )}
 
@@ -224,7 +290,6 @@ function TimeBlock({ label, h, m, ampm, onH, onM, onAmPm }) {
   return (
     <div>
       <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "#9a8f7a", fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      {/* HH:MM */}
       <div style={{ display: "flex", alignItems: "center", background: "#f5f0e8", border: "2px solid #e8e0d0", borderRadius: 10, overflow: "hidden", marginBottom: 6 }}>
         <input
           className="field"
@@ -248,7 +313,6 @@ function TimeBlock({ label, h, m, ampm, onH, onM, onAmPm }) {
           style={{ flex: 1, background: "transparent", border: "none", padding: "11px 8px 11px 4px", fontSize: 16, fontWeight: 500, color: "#1a1814", width: "45%", outline: "none", textAlign: "center" }}
         />
       </div>
-      {/* AM / PM toggle */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
         {["AM", "PM"].map((val) => (
           <button
