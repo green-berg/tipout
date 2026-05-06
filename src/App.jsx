@@ -193,7 +193,20 @@ function TimePicker({ label, h, m, ampm, onH, onM, onAmPm }) {
         <div style={{ fontSize: 13, fontWeight: 700, color: "#c8a070", flexShrink: 0, marginBottom: 1 }}>:</div>
         <PickerColumn items={MINUTES} value={m || "00"} onChange={onM} width={30} loop={true} />
         <div style={{ width: 1, height: ITEM_H * 2, background: "#e8e0d0", flexShrink: 0, margin: "0 2px" }} />
-        <PickerColumn items={AMPM} value={ampm} onChange={onAmPm} width={32} loop={false} />
+        {/* AM/PM as tap buttons — more reliable than scroll for 2 items */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, padding: "4px 2px" }}>
+          {["AM", "PM"].map((val) => (
+            <button key={val} onClick={() => onAmPm(val)} style={{
+              width: 34, padding: "5px 0",
+              background: ampm === val ? "#b8860b" : "transparent",
+              color: ampm === val ? "#fff" : "#b8a898",
+              border: ampm === val ? "none" : "1px solid #e8e0d0",
+              borderRadius: 6, fontSize: 11, fontWeight: 700,
+              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              letterSpacing: "0.05em",
+            }}>{val}</button>
+          ))}
+        </div>
       </div>
     </div>
   );
