@@ -239,8 +239,14 @@ export default function TipSplit() {
       rows.push({ name: s.name.trim(), mins, startH: s.startH, startM: s.startM, startAmPm: s.startAmPm, endH: s.endH, endM: s.endM, endAmPm: s.endAmPm });
     }
     const totalMins = rows.reduce((a, b) => a + b.mins, 0);
-    const computed = rows.map((r) => ({ ...r, exact: r.mins * tips / totalMins, floored: Math.floor(r.mins * tips / totalMins) }));
-    const distributed = computed.reduce((a, b) => a + b.floored, 0);
+    let computed = rows.map((r) => ({ ...r, exact: r.mins * tips / totalMins, rounded: Math.round(r.mins * tips / totalMins) }));
+    // If standard rounding causes total to exceed pool, nudge highest earner(s) down by $1 until balanced
+    let distributed = computed.reduce((a, b) => a + b.rounded, 0);
+    while (distributed > tips) {
+      const maxIdx = computed.reduce((bestI, r, i, arr) => r.rounded > arr[bestI].rounded ? i : bestI, 0);
+      computed = computed.map((r, i) => i === maxIdx ? { ...r, rounded: r.rounded - 1 } : r);
+      distributed -= 1;
+    }
     setResults({ computed, distributed, remainder: tips - distributed, totalMins });
   }, [staff, totalTips]);
 
@@ -341,7 +347,7 @@ export default function TipSplit() {
                     <div style={{ fontSize: 11, color: "#9a8f7a", marginBottom: 1 }}>{fmtTime(r.startH, r.startM, r.startAmPm)} → {fmtTime(r.endH, r.endM, r.endAmPm)}</div>
                     <div style={{ fontSize: 11, color: "#b8a898" }}>{hoursLabel(r.mins)} · {fmt(r.exact)} exact</div>
                   </div>
-                  <div style={{ fontSize: 26, fontFamily: "'Fraunces', serif", fontWeight: 700, color: "#b8860b", marginLeft: 12 }}>${r.floored}</div>
+                  <div style={{ fontSize: 26, fontFamily: "'Fraunces', serif", fontWeight: 700, color: "#b8860b", marginLeft: 12 }}>${r.rounded}</div>
                 </div>
               ))}
             </div>
