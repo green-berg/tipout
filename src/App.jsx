@@ -19,6 +19,7 @@ const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"))
 const AMPM = ["AM", "PM"];
 const ITEM_H = 28;
 const VISIBLE = 3;
+const LOOPS = 20; // number of times we repeat the list for infinite feel
 
 const EMPTY = { name: "", startH: "5", startM: "00", startAmPm: "PM", endH: "10", endM: "00", endAmPm: "PM" };
 const DEFAULT_STAFF = [{ ...EMPTY }, { ...EMPTY }];
@@ -39,28 +40,74 @@ const saveSession = (staff, totalTips) => {
 };
 const clearSession = () => { try { localStorage.removeItem(STORAGE_KEY); } catch {} };
 
-function PickerColumn({ items, value, onChange, width }) {
+function PickerColumn({ items, value, onChange, width, loop = false }) {
   const ref = useRef(null);
-  const idx = Math.max(0, items.indexOf(String(value)));
-  const startY = useRef(0);
-  const startScroll = useRef(0);
   const isDragging = useRef(false);
   const velocity = useRef(0);
   const lastY = useRef(0);
   const lastTime = useRef(0);
+  const startY = useRef(0);
+  const startScroll = useRef(0);
   const animFrame = useRef(null);
+  const initialized = useRef(false);
+
+  const repeated = loop ? Array.from({ length: LOOPS }, () => items).flat() : items;
+  const totalItems = repeated.length;
+
+  // For looping: start in the middle of the repeated list
+  const getInitialScroll = (val) => {
+    const baseIdx = items.indexOf(String(val));
+    const safeIdx = baseIdx < 0 ? 0 : baseIdx;
+    if (loop) {
+      // Start near the middle loop
+      const middleLoop = Math.floor(LOOPS / 2);
+      return (middleLoop * items.length + safeIdx) * ITEM_H;
+    }
+    return safeIdx * ITEM_H;
+  };
 
   useEffect(() => {
-    if (ref.current && !isDragging.current) {
-      ref.current.scrollTop = idx * ITEM_H;
+    if (ref.current && !initialized.current) {
+      ref.current.scrollTop = getInitialScroll(value);
+      initialized.current = true;
     }
-  }, [idx]);
+  }, []);
+
+  // When value changes externally, sync scroll without animation
+  const prevValue = useRef(value);
+  useEffect(() => {
+    if (value !== prevValue.current && ref.current && !isDragging.current) {
+      ref.current.scrollTop = getInitialScroll(value);
+      prevValue.current = value;
+    }
+  }, [value]);
+
+  const getCurrentValue = () => {
+    if (!ref.current) return value;
+    const rawIdx = Math.round(ref.current.scrollTop / ITEM_H);
+    const clamped = Math.max(0, Math.min(totalItems - 1, rawIdx));
+    return repeated[clamped];
+  };
 
   const snapToNearest = () => {
     if (!ref.current) return;
-    const snapped = Math.max(0, Math.min(items.length - 1, Math.round(ref.current.scrollTop / ITEM_H)));
+    const rawIdx = ref.current.scrollTop / ITEM_H;
+    const snapped = Math.max(0, Math.min(totalItems - 1, Math.round(rawIdx)));
     ref.current.scrollTop = snapped * ITEM_H;
-    onChange(items[snapped]);
+    const newVal = repeated[snapped];
+    onChange(newVal);
+
+    // Re-center if near the edges (looping only)
+    if (loop) {
+      const itemsLen = items.length;
+      const currentIdx = items.indexOf(String(newVal));
+      const middleLoop = Math.floor(LOOPS / 2);
+      const middleScroll = (middleLoop * itemsLen + currentIdx) * ITEM_H;
+      // Silently jump to middle if too close to edges
+      if (snapped < itemsLen * 2 || snapped > totalItems - itemsLen * 2) {
+        ref.current.scrollTop = middleScroll;
+      }
+    }
   };
 
   const applyMomentum = () => {
@@ -102,14 +149,12 @@ function PickerColumn({ items, value, onChange, width }) {
 
   return (
     <div style={{ position: "relative", width, height: totalH, overflow: "hidden", flexShrink: 0 }}>
-      {/* Selection bar */}
       <div style={{
         position: "absolute", top: "50%", left: 0, right: 0,
         height: ITEM_H, transform: "translateY(-50%)",
         borderTop: "1px solid #c8a070", borderBottom: "1px solid #c8a070",
         pointerEvents: "none", zIndex: 2
       }} />
-      {/* Fades */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: ITEM_H, background: "linear-gradient(to bottom, rgba(245,240,232,0.95), rgba(245,240,232,0))", pointerEvents: "none", zIndex: 2 }} />
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: ITEM_H, background: "linear-gradient(to top, rgba(245,240,232,0.95), rgba(245,240,232,0))", pointerEvents: "none", zIndex: 2 }} />
       <div
@@ -123,9 +168,9 @@ function PickerColumn({ items, value, onChange, width }) {
           WebkitOverflowScrolling: "touch",
         }}
       >
-        <style>{`.picker-scroll::-webkit-scrollbar { display: none; }`}</style>
-        {items.map((item) => (
-          <div key={item} style={{
+        <style>{`div::-webkit-scrollbar{display:none}`}</style>
+        {repeated.map((item, i) => (
+          <div key={i} style={{
             height: ITEM_H, display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 14,
             fontWeight: String(value) === item ? 700 : 400,
@@ -144,11 +189,11 @@ function TimePicker({ label, h, m, ampm, onH, onM, onAmPm }) {
     <div>
       <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "#9a8f7a", fontWeight: 600, marginBottom: 4, textAlign: "center" }}>{label}</div>
       <div style={{ background: "#f5f0e8", borderRadius: 10, border: "1.5px solid #e8e0d0", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", gap: 2 }}>
-        <PickerColumn items={HOURS} value={h || "5"} onChange={onH} width={30} />
+        <PickerColumn items={HOURS} value={h || "5"} onChange={onH} width={30} loop={true} />
         <div style={{ fontSize: 13, fontWeight: 700, color: "#c8a070", flexShrink: 0, marginBottom: 1 }}>:</div>
-        <PickerColumn items={MINUTES} value={m || "00"} onChange={onM} width={30} />
+        <PickerColumn items={MINUTES} value={m || "00"} onChange={onM} width={30} loop={true} />
         <div style={{ width: 1, height: ITEM_H * 2, background: "#e8e0d0", flexShrink: 0, margin: "0 2px" }} />
-        <PickerColumn items={AMPM} value={ampm} onChange={onAmPm} width={32} />
+        <PickerColumn items={AMPM} value={ampm} onChange={onAmPm} width={32} loop={false} />
       </div>
     </div>
   );
@@ -252,7 +297,6 @@ export default function TipSplit() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {staff.map((s, i) => (
               <div key={i} className="row-in" style={{ background: "#fff", borderRadius: 12, padding: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", border: "1.5px solid #ede7d9" }}>
-                {/* Name */}
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
                   <input className="field" placeholder="Name" value={s.name} onChange={(e) => update(i, "name", e.target.value)}
                     style={{ flex: 1, background: "#f5f0e8", border: "2px solid #e8e0d0", borderRadius: 8, padding: "9px 12px", fontSize: 14, fontWeight: 500, color: "#1a1814" }} />
@@ -261,7 +305,6 @@ export default function TipSplit() {
                       style={{ background: "#f5f0e8", border: "none", borderRadius: 8, width: 36, height: 36, fontSize: 16, color: "#c8a070", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                   )}
                 </div>
-                {/* Pickers side by side */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 16px 1fr", gap: 6, alignItems: "center" }}>
                   <TimePicker label="Clock In" h={s.startH} m={s.startM} ampm={s.startAmPm}
                     onH={(v) => update(i, "startH", v)} onM={(v) => update(i, "startM", v)} onAmPm={(v) => update(i, "startAmPm", v)} />
