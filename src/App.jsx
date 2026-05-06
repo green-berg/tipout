@@ -239,23 +239,8 @@ export default function TipSplit() {
       rows.push({ name: s.name.trim(), mins, startH: s.startH, startM: s.startM, startAmPm: s.startAmPm, endH: s.endH, endM: s.endM, endAmPm: s.endAmPm });
     }
     const totalMins = rows.reduce((a, b) => a + b.mins, 0);
-    const exact = rows.map((r) => ({ ...r, exact: r.mins * tips / totalMins }));
-    // Largest remainder method: floor everyone, then give $1 bonuses to highest fractional parts
-    const floored = exact.map((r) => ({ ...r, rounded: Math.floor(r.exact), frac: r.exact - Math.floor(r.exact) }));
-    let distributed = floored.reduce((a, b) => a + b.rounded, 0);
-    let remainder = Math.round(tips - distributed);
-    // Sort by fractional part descending, randomizing ties so no one is systematically shorted
-    const order = floored.map((_, i) => i).sort((a, b) => {
-      const diff = floored[b].frac - floored[a].frac;
-      if (Math.abs(diff) < 0.0001) return Math.random() - 0.5; // random tiebreaker
-      return diff;
-    });
-    let computed = [...floored];
-    for (let i = 0; i < remainder; i++) {
-      const idx = order[i];
-      computed[idx] = { ...computed[idx], rounded: computed[idx].rounded + 1 };
-    }
-    distributed = computed.reduce((a, b) => a + b.rounded, 0);
+    const computed = rows.map((r) => ({ ...r, exact: r.mins * tips / totalMins, rounded: Math.floor(r.mins * tips / totalMins) }));
+    const distributed = computed.reduce((a, b) => a + b.rounded, 0);
     setResults({ computed, distributed, remainder: tips - distributed, totalMins });
   }, [staff, totalTips]);
 
